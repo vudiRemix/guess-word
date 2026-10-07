@@ -1,10 +1,7 @@
-// Семантическая близость слов на векторах RusVectores (см. tools/build_data.py).
+// Семантическая близость слов (векторы собирает tools/build_data.py).
 // Векторы хранятся в сжатом виде (product quantization): у каждого слова
-// 100 байт — номера центроидов, сами центроиды лежат в codebook.bin.
-
-const SUBVECTORS = 100;
-const CENTROIDS = 256;
-const SUBDIM = 3;
+// по байту на кусок вектора — номер центроида, сами центроиды лежат в codebook.bin.
+// Размеры описаны в meta.json.
 
 export const normalize = (s) => s.trim().toLowerCase().replace(/ё/g, "е");
 
@@ -15,32 +12,39 @@ export class Model {
       if (!res.ok) throw new Error(`Не удалось загрузить ${name}`);
       return res[kind]();
     };
-    const [words, codes, codebook, forms] = await Promise.all([
+    const [words, codes, codebook, forms, meta] = await Promise.all([
       get("words.txt", "text"),
       get("vectors.bin", "arrayBuffer"),
       get("codebook.bin", "arrayBuffer"),
       get("forms.json", "json"),
+      get("meta.json", "json"),
     ]);
-    return new Model(words.trim().split("\n"), new Uint8Array(codes), new Float32Array(codebook), forms);
+    return new Model(words.trim().split("\n"), new Uint8Array(codes), new Float32Array(codebook), forms, meta);
   }
 
-  constructor(words, codes, codebook, forms) {
+  constructor(words, codes, codebook, forms, meta) {
     this.words = words;
     this.codes = codes;
     this.codebook = codebook;
     this.forms = forms;
+    this.sub = meta.subvectors;
+    this.centroids = meta.centroids;
+    this.subdim = meta.subdim;
+    // В рейтинге участвуют только первые (самые частые) слова, см. tools/build_data.py.
+    this.ranked = Math.min(meta.ranked, words.length);
     this.index = new Map(words.map((w, i) => [normalize(w), i]));
 
-    const centroidNorms = new Float32Array(SUBVECTORS * CENTROIDS);
-    for (let k = 0; k < SUBVECTORS * CENTROIDS; k++) {
+    const { sub, centroids, subdim } = this;
+    const centroidNorms = new Float32Array(sub * centroids);
+    for (let k = 0; k < sub * centroids; k++) {
       let sum = 0;
-      for (let d = 0; d < SUBDIM; d++) sum += codebook[k * SUBDIM + d] ** 2;
+      for (let d = 0; d < subdim; d++) sum += codebook[k * subdim + d] ** 2;
       centroidNorms[k] = sum;
     }
     this.norms = new Float32Array(words.length);
     for (let i = 0; i < words.length; i++) {
       let sum = 0;
-      for (let j = 0; j < SUBVECTORS; j++) sum += centroidNorms[j * CENTROIDS + codes[i * SUBVECTORS + j]];
+      for (let j = 0; j < sub; j++) sum += centroidNorms[j * centroids + codes[i * sub + j]];
       this.norms[i] = Math.sqrt(sum) || 1;
     }
     this.cache = new Map();
@@ -48,6 +52,11 @@ export class Model {
 
   get size() {
     return this.words.length;
+  }
+
+  // Самое большое возможное место: загаданное слово плюс все слова рейтинга.
+  get maxRank() {
+    return this.ranked + 1;
   }
 
   // Индекс слова в словаре или -1. Понимает «ё» и множественное число.
@@ -58,38 +67,51 @@ export class Model {
     return lemma !== undefined && this.index.has(lemma) ? this.index.get(lemma) : -1;
   }
 
-  // Рейтинг всех слов относительно загаданного: rank[i] — место слова i (1 — само слово),
-  // order[k] — слово на месте k + 1.
+  // rank[i] — место слова i (1 — загаданное), order[k] — слово на месте k + 1.
+  // Место — это 1 + число слов рейтинга, которые ближе к загаданному.
   ranking(secret) {
     if (this.cache.has(secret)) return this.cache.get(secret);
-    const { codes, codebook, norms } = this;
+    const { codes, codebook, norms, sub, centroids, subdim } = this;
     const n = this.size;
 
     // Скалярное произведение каждого центроида с соответствующим куском загаданного вектора.
-    const table = new Float32Array(SUBVECTORS * CENTROIDS);
-    for (let j = 0; j < SUBVECTORS; j++) {
-      const own = (j * CENTROIDS + codes[secret * SUBVECTORS + j]) * SUBDIM;
-      for (let c = 0; c < CENTROIDS; c++) {
-        const k = (j * CENTROIDS + c) * SUBDIM;
+    const table = new Float32Array(sub * centroids);
+    for (let j = 0; j < sub; j++) {
+      const own = (j * centroids + codes[secret * sub + j]) * subdim;
+      for (let c = 0; c < centroids; c++) {
+        const k = (j * centroids + c) * subdim;
         let dot = 0;
-        for (let d = 0; d < SUBDIM; d++) dot += codebook[k + d] * codebook[own + d];
-        table[j * CENTROIDS + c] = dot;
+        for (let d = 0; d < subdim; d++) dot += codebook[k + d] * codebook[own + d];
+        table[j * centroids + c] = dot;
       }
     }
 
     const score = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       let dot = 0;
-      for (let j = 0; j < SUBVECTORS; j++) dot += table[j * CENTROIDS + codes[i * SUBVECTORS + j]];
+      for (let j = 0; j < sub; j++) dot += table[j * centroids + codes[i * sub + j]];
       score[i] = dot / norms[i];
     }
-    score[secret] = Infinity;
 
-    const order = new Uint32Array(n);
-    for (let i = 0; i < n; i++) order[i] = i;
-    order.sort((a, b) => score[b] - score[a]);
+    const others = [];
+    for (let i = 0; i < this.ranked; i++) if (i !== secret) others.push(i);
+    others.sort((a, b) => score[b] - score[a]);
+    const order = Uint32Array.from([secret, ...others]);
+
+    // Для каждого слова — бинарный поиск среди отсортированных слов рейтинга.
+    const sorted = Float32Array.from(others, (i) => score[i]);
     const rank = new Uint32Array(n);
-    for (let k = 0; k < n; k++) rank[order[k]] = k + 1;
+    for (let i = 0; i < n; i++) {
+      let lo = 0;
+      let hi = sorted.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (sorted[mid] > score[i]) lo = mid + 1;
+        else hi = mid;
+      }
+      rank[i] = lo + 2;
+    }
+    rank[secret] = 1;
 
     const result = { rank, order };
     this.cache.set(secret, result);

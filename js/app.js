@@ -195,7 +195,7 @@ const isToday = () => game.mode !== "custom" && game.id === todayNumber();
 
 function rowHtml(i, { current = false, hint = false } = {}) {
   const rank = rankOf(i);
-  const width = Math.max(2, 100 * (1 - Math.log(rank) / Math.log(model.size)));
+  const width = Math.max(2, 100 * (1 - Math.log(rank) / Math.log(model.maxRank)));
   const cls = ["row", colorOf(rank), current && "current", hint && "hint", rank === 1 && "win"].filter(Boolean).join(" ");
   return `<div class="${cls}">
     <div class="bar" style="width:${width.toFixed(1)}%"></div>
@@ -319,7 +319,7 @@ function giveHint() {
   // Ищем ближайшее ещё не названное слово: сначала ближе к загаданному, потом дальше.
   let i = -1;
   for (let r = target; r >= 2 && i < 0; r--) if (!guessed.has(ranking.order[r - 1])) i = ranking.order[r - 1];
-  for (let r = target + 1; r <= model.size && i < 0; r++) if (!guessed.has(ranking.order[r - 1])) i = ranking.order[r - 1];
+  for (let r = target + 1; r <= ranking.order.length && i < 0; r++) if (!guessed.has(ranking.order[r - 1])) i = ranking.order[r - 1];
   if (i < 0) return;
   addGuess(i, true);
   showMessage(`Подсказка: «${model.words[i]}» — ${rankOf(i)} место`);
@@ -364,7 +364,7 @@ function showHelp() {
   const example = (word) => {
     const i = model.find(word);
     const rank = model.ranking(dog).rank[i];
-    const width = Math.max(2, 100 * (1 - Math.log(rank) / Math.log(model.size)));
+    const width = Math.max(2, 100 * (1 - Math.log(rank) / Math.log(model.maxRank)));
     return `<div class="row ${colorOf(rank)}"><div class="bar" style="width:${width}%"></div><span class="word">${word}</span><span class="rank">${rank}</span></div>`;
   };
   openDialog(`
