@@ -14,11 +14,14 @@
 
 ## Как это работает
 
-Близость слов считается в браузере по векторам [navec](https://github.com/natasha/navec)
-(модель `hudlit`, 12 млрд токенов художественной литературы). Сервер не нужен:
+Близость слов считается в браузере по векторам [RusVectores](https://rusvectores.org/)
+(модель `ruwikiruscorpora_upos_cbow_300_10_2021`: НКРЯ + Википедия, ~1,2 млрд слов).
+Модель обучена на начальных формах с пометкой части речи, поэтому имена собственные
+не смешиваются с обычными словами. Векторы центрируются: иначе частые слова
+оказывались бы далеко от редких просто из-за частотности. Сервер не нужен:
 это статический сайт, его можно выложить на GitHub Pages, Netlify и куда угодно ещё.
 
-В `data/` лежат ~27 тыс. самых частотных существительных в начальной форме и их векторы
+В `data/` лежат ~28 тыс. самых частотных существительных в начальной форме и их векторы
 в сжатом виде (product quantization, 100 байт на слово). Для загаданного слова
 рейтинг всех слов считается примерно за 25 мс.
 
@@ -27,7 +30,7 @@
 | `index.html`, `css/`, `js/app.js` | интерфейс |
 | `js/engine.js` | загрузка словаря и подсчёт рейтинга |
 | `js/levels.js` | слова для ежедневных уровней |
-| `tools/build_data.py` | сборка `data/` из модели navec |
+| `tools/build_data.py` | сборка `data/` из модели RusVectores |
 
 ## Запуск локально
 
@@ -46,9 +49,9 @@ python3 -m http.server 8000
 ## Пересборка словаря
 
 ```sh
-pip install navec pymorphy3 pymorphy3-dicts-ru
-curl -LO https://storage.yandexcloud.net/natasha-navec/packs/navec_hudlit_v1_12B_500K_300d_100q.tar
-python tools/build_data.py navec_hudlit_v1_12B_500K_300d_100q.tar
+pip install numpy pymorphy3 pymorphy3-dicts-ru
+curl -LO http://vectors.nlpl.eu/repository/20/220.zip && unzip 220.zip model.txt
+python tools/build_data.py model.txt   # около 10 минут, в основном сжатие векторов
 ```
 
 Слова для уровней правятся в `js/levels.js`. Каждое должно быть в `data/words.txt`.

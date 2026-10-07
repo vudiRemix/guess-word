@@ -150,16 +150,31 @@ function openGame() {
   if (location.hash !== hash) history.replaceState(null, "", hash);
   if (route.mode !== "custom") store.set("mode", route.mode);
 
-  game = { ...route, key: `game:${route.mode}:${route.id}`, url: pageUrl(hash) };
-  state = store.get(game.key, null) || { guesses: [], last: -1, status: "playing" };
+  game = { ...route, key: `game2:${route.mode}:${route.id}`, url: pageUrl(hash) };
+  state = loadGame(game.key);
   ranking = model.ranking(game.secret);
   els.message.textContent = "";
   els.message.className = "message";
   render();
 }
 
+// В хранилище кладём сами слова, а не их номера: номера меняются при пересборке словаря.
+function loadGame(key) {
+  const saved = store.get(key, null);
+  if (!saved) return { guesses: [], last: -1, status: "playing" };
+  return {
+    guesses: saved.guesses.map((g) => ({ i: model.find(g.w), hint: g.hint })).filter((g) => g.i >= 0),
+    last: saved.last ? model.find(saved.last) : -1,
+    status: saved.status,
+  };
+}
+
 function saveGame() {
-  store.set(game.key, state);
+  store.set(game.key, {
+    guesses: state.guesses.map((g) => ({ w: model.words[g.i], hint: g.hint })),
+    last: state.last >= 0 ? model.words[state.last] : null,
+    status: state.status,
+  });
   if (state.status !== "playing" && game.mode !== "custom") {
     const results = store.get("results", {});
     results[`${game.mode}:${game.id}`] = {
