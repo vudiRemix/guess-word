@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Загадано слово. Попытки не ограничены. После ввода слова вы увидите его место в рейтинге близости к загаданному — загаданное слово стоит на первом месте. Игра на ассоциации по принципу «тепло-холодно»."
+    />
+    <meta name="theme-color" content="#16121f" />
+    <title>Угадай слово</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔮</text></svg>" />
+    <link rel="stylesheet" href="css/style.css" />
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <main class="app">
+      <header class="top">
+        <button class="icon-btn" data-action="help" title="Как играть?" aria-label="Как играть?">?</button>
+        <h1>Угадай слово</h1>
+        <button class="icon-btn" data-action="menu" title="Меню" aria-label="Меню">☰</button>
+      </header>
+
+      <nav class="levels" aria-label="Сложность">
+        <button data-level="easy">Лёгкий 🐥</button>
+        <button data-level="medium">Средний 🦊</button>
+        <button data-level="hard">Сложный 🦉</button>
+      </nav>
+
+      <div class="info">
+        <span id="game-title"></span>
+        <span>Попыток: <b id="attempts">0</b></span>
+        <span id="hints-info" hidden>Подсказок: <b id="hints">0</b></span>
+        <button class="eye" data-action="toggle-hidden" title="Скрыть слова" aria-label="Скрыть слова">👁</button>
+      </div>
+
+      <section id="finish" class="finish" hidden></section>
+
+      <form id="guess-form" class="guess" autocomplete="off">
+        <input id="guess-input" type="text" placeholder="Введите слово" enterkeyhint="send" autocapitalize="none" spellcheck="false" disabled />
+        <button type="submit" disabled>Угадать</button>
+      </form>
+      <p id="message" class="message" role="status"></p>
+
+      <section id="last" class="list"></section>
+      <section id="history" class="list"></section>
+
+      <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Загружаю словарь…</p>
+      </div>
+    </main>
+
+    <dialog id="dialog">
+      <button class="close" data-action="close" aria-label="Закрыть">✕</button>
+      <div id="dialog-body"></div>
+    </dialog>
+
+    <div id="toast" class="toast" hidden></div>
+  </body>
+</html>
