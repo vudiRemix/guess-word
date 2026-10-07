@@ -4,3 +4,4 @@ model.txt
 model.bin
 __pycache__/
 .venv/
+*.vec.gz
